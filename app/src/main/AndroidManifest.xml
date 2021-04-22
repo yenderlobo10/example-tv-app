@@ -21,6 +21,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyTvApp"
         android:usesCleartextTraffic="true">
+        <activity android:name=".watch.TorrentSelectActivity" />
         <activity
             android:name=".MainActivity"
             android:banner="@drawable/app_icon_your_company"

@@ -1,4 +1,48 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
 
     <style name="Theme.MyTvApp" parent="@style/Theme.Leanback" />
+
+    <style name="Theme.MyTvApp.TorrentSelect" parent="Theme.Leanback.GuidedStep">
+        <item name="guidedActionsBackground">@color/selected_background</item>
+        <item name="guidedStepBackground">@color/secondary_background</item>
+        <item name="guidedActionItemTitleStyle">@style/GuideActionTitleStyle</item>
+        <item name="guidedActionItemDescriptionStyle">@style/GuideActionDescriptionStyle</item>
+        <item name="guidanceTitleStyle">@style/GuidanceTitleStyle</item>
+        <item name="guidanceDescriptionStyle">@style/GuidanceDescriptionStyle</item>
+    </style>
+
+    <style name="Theme.MyTvApp.TorrentSelect.NoSelector">
+        <item name="guidedActionsSelectorDrawable">@null</item>
+    </style>
+
+    <style name="GuideActionTitleStyle" parent="Widget.Leanback.GuidedActionItemTitleStyle">
+        <item name="android:textColor">@color/secondary_background</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="GuideActionDescriptionStyle" parent="Widget.Leanback.GuidedActionItemDescriptionStyle">
+        <item name="android:textColor">#2A363C</item>
+    </style>
+
+    <style name="GuidanceTitleStyle" parent="Widget.Leanback.GuidanceTitleStyle">
+        <item name="android:translationY">-54dp</item>
+    </style>
+    <style name="GuidanceDescriptionStyle" parent="Widget.Leanback.GuidanceDescriptionStyle">
+        <item name="android:translationY">-52dp</item>
+        <item name="android:maxLines">10</item>
+    </style>
+
+    <style name="LoaderBottomSheetDialog" parent="Theme.MaterialComponents.BottomSheetDialog">
+        <item name="cornerSizeTopLeft">24dp</item>
+        <item name="cornerSizeTopRight">24dp</item>
+    </style>
+
+    <style name="LoaderDialogFragment" parent="Theme.MaterialComponents.Dialog">
+        <item name="android:windowBackground">@color/secondary_background_dim</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:padding">0dp</item>
+    </style>
+
 </resources>

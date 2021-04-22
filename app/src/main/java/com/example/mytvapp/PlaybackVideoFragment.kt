@@ -2,35 +2,27 @@ package com.example.mytvapp
 
 import android.net.Uri
 import android.os.*
+import android.view.View
 import android.widget.Toast
-import androidx.core.net.toFile
 import androidx.leanback.app.VideoSupportFragment
 import androidx.leanback.app.VideoSupportFragmentGlueHost
 import androidx.leanback.media.MediaPlayerAdapter
 import androidx.leanback.media.PlaybackGlue
 import androidx.leanback.media.PlaybackTransportControlGlue
 import androidx.leanback.widget.PlaybackControlsRow
-import androidx.lifecycle.lifecycleScope
-import com.frostwire.jlibtorrent.TorrentHandle
+import com.github.se_bastiaan.torrentstream.StreamStatus
+import com.github.se_bastiaan.torrentstream.Torrent
+import com.github.se_bastiaan.torrentstream.TorrentOptions
+import com.github.se_bastiaan.torrentstream.TorrentStream
+import com.github.se_bastiaan.torrentstream.listeners.TorrentListener
 import com.google.android.exoplayer2.*
-import com.google.android.exoplayer2.database.DefaultDatabaseProvider
 import com.google.android.exoplayer2.ext.leanback.LeanbackPlayerAdapter
-import com.google.android.exoplayer2.source.ProgressiveMediaSource
-import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
-import com.google.android.exoplayer2.upstream.cache.Cache
-import com.google.android.exoplayer2.upstream.cache.CacheDataSource
-import com.google.android.exoplayer2.upstream.cache.LeastRecentlyUsedCacheEvictor
-import com.google.android.exoplayer2.upstream.cache.SimpleCache
+import com.google.android.exoplayer2.trackselection.DefaultTrackSelector
+import com.google.android.exoplayer2.trackselection.DefaultTrackSelector.SelectionOverride
+import com.google.android.exoplayer2.ui.SubtitleView
+import com.google.android.exoplayer2.util.MimeTypes
 import com.google.android.exoplayer2.video.VideoListener
-import com.masterwok.simpletorrentandroid.TorrentSession
-import com.masterwok.simpletorrentandroid.TorrentSessionOptions
-import com.masterwok.simpletorrentandroid.contracts.TorrentSessionListener
-import com.masterwok.simpletorrentandroid.models.TorrentSessionStatus
-import kotlinx.coroutines.async
-import kotlinx.coroutines.launch
-import org.greenrobot.eventbus.EventBus
-import org.greenrobot.eventbus.Subscribe
-import org.greenrobot.eventbus.ThreadMode
+import java.util.*
 import kotlin.math.roundToInt
 import kotlin.time.ExperimentalTime
 
@@ -43,12 +35,17 @@ class PlaybackVideoFragment : VideoSupportFragment() {
     private lateinit var mVideo: Movie
 
     private lateinit var mSimplePlayer: SimpleExoPlayer
+    private lateinit var mTrackSelector: DefaultTrackSelector
+    private lateinit var mSubtitleView: SubtitleView
+
+    private lateinit var mTorrentStream: TorrentStream
+    private lateinit var mTorrentListener: TorrentListener
+    private var isPlayTorrent = false
+    private var torrentProgress = 0.5f
 
     @ExperimentalTime
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        EventBus.getDefault().register(this)
 
         try {
 
@@ -57,9 +54,21 @@ class PlaybackVideoFragment : VideoSupportFragment() {
 
             //setupDefaultPlayer()
 
+        } catch (ex: Exception) {
+
+            println(":: ERROR ::")
+            ex.printStackTrace()
+        }
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        try {
+
             setupExoPlayer()
 
-            runDownloadTestTorrent()
+            // runDownloadTestTorrent()
 
         } catch (ex: Exception) {
 
@@ -115,7 +124,19 @@ class PlaybackVideoFragment : VideoSupportFragment() {
 
         val glueHost = VideoSupportFragmentGlueHost(this@PlaybackVideoFragment)
 
-        mSimplePlayer = SimpleExoPlayer.Builder(requireActivity()).build()
+        mSubtitleView = requireActivity().findViewById(R.id.playback_subtitles)
+
+        mTrackSelector = DefaultTrackSelector(requireContext())
+
+        mSimplePlayer = SimpleExoPlayer.Builder(requireActivity())
+            .setTrackSelector(mTrackSelector)
+            .build()
+
+        // TODO: add subtitle view
+        mSimplePlayer.textComponent?.let {
+
+            it.addTextOutput(mSubtitleView)
+        }
 
         val playerAdapter = LeanbackPlayerAdapter(requireActivity(), mSimplePlayer, UPDATE_DELAY)
         playerAdapter.setRepeatAction(PlaybackControlsRow.RepeatAction.INDEX_NONE)
@@ -135,7 +156,7 @@ class PlaybackVideoFragment : VideoSupportFragment() {
         }
 
 
-        mVideo.videoUrl?.let { url ->
+        mVideo.videoUrl?.let {
 
             mSimplePlayer.addVideoListener(object : VideoListener {
                 override fun onVideoSizeChanged(
@@ -147,28 +168,72 @@ class PlaybackVideoFragment : VideoSupportFragment() {
                     println(":: VIDEO SIZE CHANGED :: ($width x $height)")
 
                     val rootView = this@PlaybackVideoFragment.view
+                    val rootViewWidth = rootView?.width!!
+                    val rootViewHeight = rootView.height
 
                     val surfaceView = this@PlaybackVideoFragment.surfaceView
                     val svLayoutParams = surfaceView.layoutParams
 
-                    svLayoutParams.width = rootView?.width!!
-                    svLayoutParams.height = rootView.height
+                    svLayoutParams.width = rootViewWidth
+                    svLayoutParams.height = rootViewHeight
                     surfaceView.requestLayout()
 
-                    println(":: ROOT VIEW :: (${rootView.width} x ${rootView.height})")
+                    // TODO: validate scale
+                    var scaleX = 1f
+                    var scaleY = 1f
 
+                    val divViewWidthAndVideoWidth = (rootViewWidth / width.toFloat())
+                    val divViewHeightAndVideoHeight = (rootViewHeight / height.toFloat())
+
+                    when {
+                        (width > rootViewWidth).and(height > rootViewHeight) -> {
+                            scaleX = (width.toFloat() / rootViewWidth)
+                            scaleY = (height.toFloat() / rootViewHeight)
+                        }
+
+                        (width < rootViewWidth).and(height < rootViewHeight) -> {
+                            scaleX = divViewWidthAndVideoWidth
+                            scaleY = divViewHeightAndVideoHeight
+                        }
+
+                        (rootViewWidth > width) -> {
+                            scaleX = divViewWidthAndVideoWidth / divViewHeightAndVideoHeight
+                        }
+
+                        (rootViewHeight > height) -> {
+                            scaleY = divViewHeightAndVideoHeight / divViewWidthAndVideoWidth
+                        }
+                    }
+
+
+                    // surfaceView.scaleX = scaleX
+                    // surfaceView.scaleY = scaleY - 0.2f
+                    // surfaceView.pivotY = (height / 2f)
+                    // surfaceView.pivotX = (width / 2f)
+
+                    println(":: ROOT VIEW :: (${rootView.width} x ${rootView.height})")
+                    println(":: SCALE :: ($scaleX / $scaleY)")
                 }
             })
 
-            mSimplePlayer.videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
+            // mSimplePlayer.videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT
 
-            mSimplePlayer.addMediaItem(MediaItem.fromUri(url))
+//            val subtitle = MediaItem.Subtitle(
+//                Uri.parse(testUrlSubtitle),
+//                MimeTypes.APPLICATION_SUBRIP,
+//                "en",
+//                C.SELECTION_FLAG_DEFAULT
+//            )
 
-            mSimplePlayer.prepare()
+//            val test = MediaItem.Builder()
+//                .setUri(url)
+//                .setSubtitles(listOf(subtitle))
+//                .build()
 
-            mSimplePlayer.addListener(object : Player.EventListener {
+            //mSimplePlayer.addMediaItem(MediaItem.fromUri(url))
+            //mSimplePlayer.addMediaItem(test)
 
-            })
+            runDownloadTestTorrent()
         }
 
         mSimplePlayer.addListener(object : Player.EventListener {
@@ -177,6 +242,16 @@ class PlaybackVideoFragment : VideoSupportFragment() {
 
                 if (state == Player.STATE_READY) {
                     println(":: STATE READY ::")
+
+//                    if (isPlayTorrent)
+//                        trackSelector(
+//                            C.TRACK_TYPE_AUDIO,
+//                            trackSelection = 1,
+//                            msgOn = 0,
+//                            msgOff = 0,
+//                            disable = true,
+//                            doChange = false
+//                        )
                 }
             }
         })
@@ -184,153 +259,243 @@ class PlaybackVideoFragment : VideoSupportFragment() {
 
     private fun runDownloadTestTorrent() {
 
-        val test = Handler(Looper.getMainLooper())
-
-        val torrentUrl = Uri.parse(testUrlTorrent)
         val location = requireContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
 
-        val torrentSessionOptions = TorrentSessionOptions(
-            downloadLocation = location!!,
-            enableLogging = false,
-            shouldStream = true,
-            onlyDownloadLargestFile = true,
-        )
+        val torrentOptions = TorrentOptions.Builder()
+            .saveLocation(location)
+            .removeFilesAfterStop(true)
+            .autoDownload(true)
+            .build()
 
-        val torrentSession = TorrentSession(torrentSessionOptions)
+        mTorrentStream = TorrentStream.init(torrentOptions)
 
-        torrentSession.listener = object : TorrentSessionListener {
-            override fun onAddTorrent(
-                torrentHandle: TorrentHandle,
-                torrentSessionStatus: TorrentSessionStatus
-            ) {
-                println(":: ADD TORRENT ::")
-                //EventBus.getDefault().post(torrentSessionStatus)
+        mTorrentListener = object : TorrentListener {
+            override fun onStreamPrepared(torrent: Torrent?) {
+                println(":: TEST => TORRENT PREPARED ::")
+                showToast(":: TORRENT PREPARED ::")
             }
 
-            override fun onBlockUploaded(
-                torrentHandle: TorrentHandle,
-                torrentSessionStatus: TorrentSessionStatus
-            ) {
-                println(":: TORRENT BLOCK UPLOADED ::")
+            override fun onStreamStarted(torrent: Torrent?) {
+                println(":: TEST => TORRENT STARTED ::")
+                showToast(":: TORRENT STARTED ::")
             }
 
-            override fun onMetadataFailed(
-                torrentHandle: TorrentHandle,
-                torrentSessionStatus: TorrentSessionStatus
-            ) {
-                println(":: TORRENT FAILED METADATA ::")
+            override fun onStreamError(torrent: Torrent?, e: java.lang.Exception?) {
+                println(":: TEST => TORRENT ERROR ::")
+                showToast(":: TORRENT ERROR ::")
             }
 
-            override fun onMetadataReceived(
-                torrentHandle: TorrentHandle,
-                torrentSessionStatus: TorrentSessionStatus
-            ) {
-                println(":: TORRENT RECEIVED METADATA ::")
+            override fun onStreamReady(torrent: Torrent?) {
+                println(":: TEST => TORRENT READY ::")
             }
 
-            override fun onPieceFinished(
-                torrentHandle: TorrentHandle,
-                torrentSessionStatus: TorrentSessionStatus
-            ) {
-                println(":: TORRENT PIECE FINISHED ::")
+            override fun onStreamProgress(torrent: Torrent?, status: StreamStatus?) {
+                println(":: TEST => TORRENT PROGRESS ::")
+                println(
+                    "TEST => " +
+                            "speed: ${status?.downloadSpeed} | " +
+                            "progress: ${status?.progress} | " +
+                            "buffer: ${status?.bufferProgress}"
+                )
 
-                println("DOWN RATE => ${torrentSessionStatus.downloadRate}")
-                println("BYTES DOWNLOADED => ${torrentSessionStatus.bytesDownloaded}")
-                println("BYTES WANTED => ${torrentSessionStatus.bytesWanted}")
+                if(torrentProgress == 0.5f){
+                    showToast(":: TORRENT DOWNLOADING ::")
+                }
 
-                //EventBus.getDefault().post(torrentSessionStatus)
+                val progress = status?.progress!!
+
+                if (progress >= torrentProgress && isPlayTorrent) {
+                    torrentProgress = progress + 5f
+
+                    val percentProgress = String.format(Locale.US, "%.1f", progress)
+
+                    showToast("PROGRESS [$percentProgress%]")
+                }
+
+
+                if (progress > 1.5 && isPlayTorrent.not()) {
+                    showToast("PLAY TORRENT")
+
+                    val videoPath = torrent?.videoFile?.path!!
+
+                    val torrentMediaItem = MediaItem.fromUri(videoPath)
+
+                    // TODO: add subtitle
+
+                    val subtitle = MediaItem.Subtitle(
+                        Uri.parse(testUrlSubtitle),
+                        MimeTypes.APPLICATION_SUBRIP,
+                        "en",
+                        C.SELECTION_FLAG_DEFAULT
+                    )
+
+                    val test = MediaItem.Builder()
+                        .setUri(videoPath)
+                        //.setSubtitles(listOf(subtitle))
+                        .build()
+
+
+                    //mPlayerGlue.pause()
+                    //mSimplePlayer.clearMediaItems()
+                    mSimplePlayer.addMediaItem(test)
+
+                    mPlayerGlue.playWhenPrepared()
+                    mSimplePlayer.prepare()
+
+                    isPlayTorrent = true
+                }
             }
 
-            override fun onTorrentDeleteFailed(
-                torrentHandle: TorrentHandle,
-                torrentSessionStatus: TorrentSessionStatus
-            ) {
-                println(":: TORRENT DELETE FAILED ::")
+            override fun onStreamStopped() {
+                println(":: TEST => TORRENT STOPPED ::")
             }
 
-            override fun onTorrentDeleted(
-                torrentHandle: TorrentHandle,
-                torrentSessionStatus: TorrentSessionStatus
-            ) {
-                println(":: TORRENT DELETED ::")
-            }
-
-            override fun onTorrentError(
-                torrentHandle: TorrentHandle,
-                torrentSessionStatus: TorrentSessionStatus
-            ) {
-                println(":: TORRENT ERROR ::")
-            }
-
-            override fun onTorrentFinished(
-                torrentHandle: TorrentHandle,
-                torrentSessionStatus: TorrentSessionStatus
-            ) {
-                println(":: TORRENT FINISHED ::")
-                //EventBus.getDefault().post(torrentSessionStatus)
-            }
-
-            override fun onTorrentPaused(
-                torrentHandle: TorrentHandle,
-                torrentSessionStatus: TorrentSessionStatus
-            ) {
-                println(":: TORRENT PAUSED ::")
-            }
-
-            override fun onTorrentRemoved(
-                torrentHandle: TorrentHandle,
-                torrentSessionStatus: TorrentSessionStatus
-            ) {
-                println(":: TORRENT REMOVED ::")
-            }
-
-            override fun onTorrentResumed(
-                torrentHandle: TorrentHandle,
-                torrentSessionStatus: TorrentSessionStatus
-            ) {
-                println(":: TORRENT RESUMED ::")
-                EventBus.getDefault().post(torrentSessionStatus)
-            }
         }
 
-        //mSimplePlayer.setThrowsWhenUsingWrongThread(false)
+        mTorrentStream.addListener(mTorrentListener)
 
-        AsyncTask.execute {
+        mTorrentStream.startStream(mVideo.videoUrl)
 
-            torrentSession.start(requireContext(), torrentUrl)
-        }
+        println("TORRENT => ${mVideo.videoUrl}")
+
+        showToast(":: WAIT START TORRENT ::")
     }
 
-    @Subscribe(threadMode = ThreadMode.MAIN)
-    public fun onAddTorrent(status: TorrentSessionStatus) {
 
-        try {
+    // trackSelection = current selection. -1 = disabled, -2 = leave as is
+    // disable = true : Include disabled in the rotation
+    // doChange = true : select a new track, false = leave same track
+    // Return = new track selection.
+    fun trackSelector(
+        trackType: Int, trackSelection: Int,
+        msgOn: Int, msgOff: Int, disable: Boolean, doChange: Boolean
+    ): Int {
+        // optionList array - 0 = renderer, 1 = track group, 2 = track
+        var trackSelection = trackSelection
+        val optionList = ArrayList<IntArray>()
+        val renderList = ArrayList<Int>()
+        val formatList = ArrayList<Format>()
 
-            println(":: POST - TORRENT EVENT ::")
+        val mti = mTrackSelector.currentMappedTrackInfo
+        val isPlaying = mPlayerGlue.isPlaying
 
-            println("STATUS => ${status.state.name}")
-            println("VIDEO => ${status.videoFileUri}")
+        if (mti == null) return -1
 
-            //mSimplePlayer.clearMediaItems()
-            //mSimplePlayer.removeMediaItem(0)
-            val torrentMediaItem = MediaItem.fromUri(status.videoFileUri)
+        for (rendIx in 0 until mti.rendererCount) {
 
-            val cache = CacheDataSource.Factory().apply {
-                
+            if (mti.getRendererType(rendIx) == trackType) {
+
+                renderList.add(rendIx)
+
+                val tga = mti.getTrackGroups(rendIx)
+
+                for (tgIx in 0 until tga.length) {
+
+                    val tg = tga[tgIx]
+
+                    for (trkIx in 0 until tg.length) {
+
+                        val selection = IntArray(3)
+                        // optionList array - 0 = renderer, 1 = track group, 2 = track
+                        selection[0] = rendIx
+                        selection[1] = tgIx
+                        selection[2] = trkIx
+
+                        optionList.add(selection)
+                        formatList.add(tg.getFormat(trkIx))
+                    }
+                }
+
+                break
+            }
+        }
+
+        val msg = StringBuilder()
+
+        if (doChange) {
+
+            when {
+                (trackSelection == -2) -> trackSelection = -1
+
+                (optionList.size == 0) -> trackSelection = -1
+
+                (++trackSelection >= optionList.size) ->
+                    trackSelection = if (disable) -1 else 0
+            }
+        }
+
+        when {
+            (trackSelection >= 0) -> {
+
+                val selection = optionList[trackSelection]
+                val override = SelectionOverride(
+                    selection[1],
+                    selection[2]
+                )
+                val tga = mti.getTrackGroups(selection[0])
+
+                var params = mTrackSelector
+                    .buildUponParameters()
+                    .setSelectionOverride(selection[0], tga, override)
+
+                if (disable) params = params.setRendererDisabled(selection[0], false)
+
+                // This line causes playback to pause when enabling subtitle
+                mTrackSelector.setParameters(params)
+
+                var language = formatList[trackSelection].language
+
+                language = if (language?.isBlank()!!) String() else {
+                    val locale = Locale(language)
+                    val langDesc = locale.displayLanguage
+                    "($langDesc)"
+                }
+
+                if (msgOn > 0) msg.append(
+                    activity!!.getString(
+                        msgOn,
+                        trackSelection + 1, language
+                    )
+                )
             }
 
-            mSimplePlayer.addMediaItem(torrentMediaItem)
+            (trackSelection == -1) -> {
 
-            mSimplePlayer.playWhenReady = true
+                if (optionList.size > 0) {
 
-            mSimplePlayer.next()
+                    for (ix in renderList.indices) {
+                        mTrackSelector.setParameters(
+                            mTrackSelector
+                                .buildUponParameters()
+                                .setRendererDisabled(renderList[ix], true)
+                        )
+                    }
+                }
 
-        } catch (ex: Exception) {
-
-            println(":: ERROR - TORRENT ADD ::")
-            ex.printStackTrace()
+                if (msgOff > 0) msg.append(activity!!.getString(msgOff))
+            }
         }
+
+        if (msg.isNotEmpty()) {
+            showToast(msg.toString())
+        }
+
+        // For some reason changing the subtitle pauses playback. This fixes that.
+        if (trackType == C.TRACK_TYPE_TEXT && isPlaying) {
+
+            mPlayerGlue.pause()
+            mPlayerGlue.play()
+        }
+
+        return trackSelection
     }
+
+
+    fun showToast(message: String) {
+
+        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+    }
+
 
     @Suppress("SimpleRedundantLet", "UNNECESSARY_SAFE_CALL")
     override fun onPause() {
@@ -343,7 +508,15 @@ class PlaybackVideoFragment : VideoSupportFragment() {
         }
 
         try {
+
+            if (mTorrentStream.isStreaming) {
+
+                mTorrentStream.stopStream()
+                mTorrentStream.removeListener(mTorrentListener)
+            }
+
             mPlayerGlue.pause()
+
         } catch (ex: Exception) {
             ex.printStackTrace()
         }
@@ -352,7 +525,13 @@ class PlaybackVideoFragment : VideoSupportFragment() {
     companion object {
         private const val UPDATE_DELAY = 16
 
+        // http://145.239.255.77/gtsubtitle/127%20Hours/English.srt
+        // https://mkvtoolnix.download/samples/vsshort-en.srt
+        private const val testUrlSubtitle =
+            "http://145.239.255.77/gtsubtitle/127%20Hours/English.srt"
+
+
         private const val testUrlTorrent =
-            "https://webtorrent.io/torrents/tears-of-steel.torrent"
+            "magnet:?xt=urn:btih:2BD98D4B35E062C617DF6CD9F08756B019A9373E&dn=Chaos.Walking.2021.lati.mp4&tr=udp%3a%2f%2ftracker.openbittorrent.com%3a80%2fannounce&tr=udp%3a%2f%2ftracker.opentrackr.org%3a1337%2fannounce"
     }
 }

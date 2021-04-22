@@ -1,39 +1,25 @@
 package com.example.mytvapp
 
-import java.util.Collections
-import java.util.Timer
-import java.util.TimerTask
-
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.os.Handler
-import androidx.leanback.app.BackgroundManager
-import androidx.leanback.app.BrowseFragment
-import androidx.leanback.widget.ArrayObjectAdapter
-import androidx.leanback.widget.HeaderItem
-import androidx.leanback.widget.ImageCardView
-import androidx.leanback.widget.ListRow
-import androidx.leanback.widget.ListRowPresenter
-import androidx.leanback.widget.OnItemViewClickedListener
-import androidx.leanback.widget.OnItemViewSelectedListener
-import androidx.leanback.widget.Presenter
-import androidx.leanback.widget.Row
-import androidx.leanback.widget.RowPresenter
-import androidx.core.app.ActivityOptionsCompat
-import androidx.core.content.ContextCompat
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.Toast
-
+import androidx.core.app.ActivityOptionsCompat
+import androidx.core.content.ContextCompat
+import androidx.leanback.app.BackgroundManager
+import androidx.leanback.app.BrowseFragment
+import androidx.leanback.widget.*
 import com.bumptech.glide.Glide
-import com.bumptech.glide.load.resource.drawable.GlideDrawable
-import com.bumptech.glide.request.animation.GlideAnimation
-import com.bumptech.glide.request.target.SimpleTarget
+import com.bumptech.glide.request.target.CustomTarget
+import com.bumptech.glide.request.transition.Transition
+import java.util.*
 
 /**
  * Loads a grid of cards with movies to browse.
@@ -120,7 +106,7 @@ class MainFragment : BrowseFragment() {
     private fun setupEventListeners() {
         setOnSearchClickedListener {
             Toast.makeText(context, "Implement your own in-app search", Toast.LENGTH_LONG)
-                    .show()
+                .show()
         }
 
         onItemViewClickedListener = ItemViewClickedListener()
@@ -129,10 +115,11 @@ class MainFragment : BrowseFragment() {
 
     private inner class ItemViewClickedListener : OnItemViewClickedListener {
         override fun onItemClicked(
-                itemViewHolder: Presenter.ViewHolder,
-                item: Any,
-                rowViewHolder: RowPresenter.ViewHolder,
-                row: Row) {
+            itemViewHolder: Presenter.ViewHolder,
+            item: Any,
+            rowViewHolder: RowPresenter.ViewHolder,
+            row: Row
+        ) {
 
             if (item is Movie) {
                 Log.d(TAG, "Item: " + item.toString())
@@ -140,10 +127,11 @@ class MainFragment : BrowseFragment() {
                 intent.putExtra(DetailsActivity.MOVIE, item)
 
                 val bundle = ActivityOptionsCompat.makeSceneTransitionAnimation(
-                        activity,
-                        (itemViewHolder.view as ImageCardView).mainImageView,
-                        DetailsActivity.SHARED_ELEMENT_NAME)
-                        .toBundle()
+                    activity,
+                    (itemViewHolder.view as ImageCardView).mainImageView,
+                    DetailsActivity.SHARED_ELEMENT_NAME
+                )
+                    .toBundle()
                 activity.startActivity(intent, bundle)
             } else if (item is String) {
                 if (item.contains(getString(R.string.error_fragment))) {
@@ -157,8 +145,10 @@ class MainFragment : BrowseFragment() {
     }
 
     private inner class ItemViewSelectedListener : OnItemViewSelectedListener {
-        override fun onItemSelected(itemViewHolder: Presenter.ViewHolder?, item: Any?,
-                                    rowViewHolder: RowPresenter.ViewHolder, row: Row) {
+        override fun onItemSelected(
+            itemViewHolder: Presenter.ViewHolder?, item: Any?,
+            rowViewHolder: RowPresenter.ViewHolder, row: Row
+        ) {
             if (item is Movie) {
                 mBackgroundUri = item.backgroundImageUrl
                 startBackgroundTimer()
@@ -170,16 +160,22 @@ class MainFragment : BrowseFragment() {
         val width = mMetrics.widthPixels
         val height = mMetrics.heightPixels
         Glide.with(context)
-                .load(uri)
-                .centerCrop()
-                .error(mDefaultBackground)
-                .into<SimpleTarget<GlideDrawable>>(
-                        object : SimpleTarget<GlideDrawable>(width, height) {
-                            override fun onResourceReady(resource: GlideDrawable,
-                                                         glideAnimation: GlideAnimation<in GlideDrawable>) {
-                                mBackgroundManager.drawable = resource
-                            }
-                        })
+            .load(uri)
+            .centerCrop()
+            .error(mDefaultBackground)
+            .into(object : CustomTarget<Drawable>(width, height) {
+                override fun onResourceReady(
+                    resource: Drawable,
+                    transition: Transition<in Drawable>?
+                ) {
+                    mBackgroundManager.drawable = resource
+                }
+
+                override fun onLoadCleared(placeholder: Drawable?) {
+                    // Not yet implemented
+                }
+            })
+
         mBackgroundTimer?.cancel()
     }
 

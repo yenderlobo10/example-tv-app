@@ -17,11 +17,11 @@ object MovieList {
 
     private fun setupMovies(): List<Movie> {
         val title = arrayOf(
-            "Zeitgeist 2010_ Year in Review",
-            "Google Demo Slam_ 20ft Search",
-            "Introducing Gmail Blue",
-            "Introducing Google Fiber to the Pole",
-            "Introducing Google Nose"
+            "Godzilla vs Kong",
+            "La Liga de la Justicia de Zack Snyder",
+            "Caos: El Inicio",
+            "Raya y el último dragón",
+            "Thor: Ragnarok"
         )
 
         val description = "Fusce id nisi turpis. Praesent viverra bibendum semper. " +
@@ -45,18 +45,18 @@ object MovieList {
             "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
         )
         val bgImageUrl = arrayOf(
-            "https://source.unsplash.com/cUpp1gAEtiU/1920x1080",
-            "https://source.unsplash.com/SXTj90G1f5c/1920x1080",
-            "https://source.unsplash.com/mP8nkggCTlA/1920x1080",
-            "https://source.unsplash.com/s6aa3O-iyYE/1920x1080",
-            "https://source.unsplash.com/3odiQvgDl4s/1920x1080",
+            "https://www.themoviedb.org/t/p/w533_and_h300_bestv2/jMWkd0fuwbG39eJpzycJzPWMCww.jpg",
+            "https://www.themoviedb.org/t/p/w533_and_h300_bestv2/pcDc2WJAYGJTTvRSEIpRZwM3Ola.jpg",
+            "https://www.themoviedb.org/t/p/w533_and_h300_bestv2/xUTzd0s4oOQz9MuxZMkfkOHRTkP.jpg",
+            "https://www.themoviedb.org/t/p/w533_and_h300_bestv2/7prYzufdIOy1KCTZKVWpjBFqqNr.jpg",
+            "https://www.themoviedb.org/t/p/w533_and_h300_bestv2/kaIfm5ryEOwYg8mLbq8HkPuM1Fo.jpg",
         )
         val cardImageUrl = arrayOf(
-            "https://source.unsplash.com/cUpp1gAEtiU/400x300",
-            "https://source.unsplash.com/SXTj90G1f5c/400x300",
-            "https://source.unsplash.com/mP8nkggCTlA/400x300",
-            "https://source.unsplash.com/s6aa3O-iyYE/400x300",
-            "https://source.unsplash.com/3odiQvgDl4s/400x300",
+            "https://www.themoviedb.org/t/p/w600_and_h900_bestv2/bnuC6hu7AB5dYW26A3o6NNLlIlE.jpg",
+            "https://www.themoviedb.org/t/p/w220_and_h330_face/rkuvJnamPl3xW9wKJsIS6qkmOCW.jpg",
+            "https://www.themoviedb.org/t/p/w220_and_h330_face/idQDWn8Yhl4zXLwpyHKlr3NXYO9.jpg",
+            "https://www.themoviedb.org/t/p/w220_and_h330_face/yHpNgjEXzZ557YiZ2r3VrKid788.jpg",
+            "https://www.themoviedb.org/t/p/w220_and_h330_face/6VFzRo4lKsEy5jlcRREctOWR2IC.jpg",
         )
 
         val list = title.indices.map {

@@ -17,5 +17,6 @@ class DetailsActivity : FragmentActivity() {
     companion object {
         const val SHARED_ELEMENT_NAME = "hero"
         const val MOVIE = "Movie"
+        const val SEARCH_TORRENTS_RESULT = "mytvapp-search-torrents-result"
     }
 }

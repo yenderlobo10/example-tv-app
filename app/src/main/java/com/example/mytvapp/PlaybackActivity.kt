@@ -14,7 +14,5 @@ class PlaybackActivity : FragmentActivity() {
                     .replace(android.R.id.content, PlaybackVideoFragment())
                     .commit()
         }
-
-        //EventBus.getDefault().register(this)
     }
 }
